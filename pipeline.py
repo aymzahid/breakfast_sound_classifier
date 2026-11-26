@@ -11,6 +11,7 @@ Steps: load data/<label>/*.wav -> band-pass -> 1 s frames -> FFT -> features (fe
 
 Outputs (folder results/):
     table3.csv              accuracy and macro F1 per classifier (mean and std over folds, %)
+    per_class.csv           precision, recall, F1 per class for the final classifier
     confusion_matrix.csv    final classifier, frames summed over all folds (rows = actual)
     confusion_matrix.png    the same as an image
     model.joblib            final classifier trained on all clips (used by classify.py)
@@ -25,7 +26,7 @@ import matplotlib
 matplotlib.use("Agg")                 # save figures to files, never open a window
 import matplotlib.pyplot as plt
 from sklearn.base import clone
-from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import ConfusionMatrixDisplay, precision_recall_fscore_support
 
 from features import build_table, CLASSES, FEATURE_NAMES
 from evaluation import (SEED, N_FOLDS, make_models, cross_validate_model, clip_votes,
@@ -88,6 +89,21 @@ def main():
     fig.savefig(RESULTS / "confusion_matrix.pdf")
     plt.close(fig)
 
+    # ---- precision / recall / F1 per class (same out-of-fold predictions) ----
+    prec, rec, f1, support = (np.asarray(a) for a in
+                              precision_recall_fscore_support(y, pred, labels=CLASSES, zero_division=0))
+    print(f"\nPer class: {FINAL}, frames summed over all {N_FOLDS} folds")
+    print(f"  {'class':10s} {'precision':>10s} {'recall':>8s} {'F1':>8s} {'frames':>8s}")
+    for c, p_, r_, f_, s_ in zip(CLASSES, prec, rec, f1, support):
+        print(f"  {c:10s} {100 * p_:9.1f}% {100 * r_:7.1f}% {100 * f_:7.1f}% {s_:8d}")
+    print("  precision = of the frames predicted as this class, share that really were it;"
+          " recall = of the real frames of this class, share that were found")
+    with open(RESULTS / "per_class.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["class", "precision", "recall", "f1", "frames"])
+        for c, p_, r_, f_, s_ in zip(CLASSES, prec, rec, f1, support):
+            w.writerow([c, f"{100 * p_:.1f}", f"{100 * r_:.1f}", f"{100 * f_:.1f}", s_])
+
     # ---- one answer per clip (how classify.py decides) ----
     t, v = clip_votes(pred, y, groups)
     print(f"\nClip level (majority vote of a clip's frames): {np.sum(t == v)}/{len(t)} clips correct "
@@ -98,7 +114,7 @@ def main():
     final = clone(make_models()[FINAL]).fit(X, y)
     joblib.dump({"model": final, "name": FINAL, "classes": CLASSES, "features": FEATURE_NAMES},
                 RESULTS / "model.joblib")
-    print(f"\nSaved to {RESULTS.relative_to(ROOT)}/: table3.csv, confusion_matrix.csv/.png/.pdf, model.joblib")
+    print(f"\nSaved to {RESULTS.relative_to(ROOT)}/: table3.csv, per_class.csv, confusion_matrix.csv/.png/.pdf, model.joblib")
     print(f"Total time {time.perf_counter() - t0:.1f} s")
 
 

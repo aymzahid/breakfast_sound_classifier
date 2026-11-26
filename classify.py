@@ -43,8 +43,11 @@ def main(paths):
     saved = load_model()
     for p in paths:
         label, counts, n = classify(p, saved)
-        detail = ", ".join(f"{k} {v}/{n}" for k, v in counts.items())
-        print(f"{Path(p).name}: {label.upper()}   (frame votes: {detail})")
+        print(f"\n{Path(p).name} : classified as {label.upper()}")
+        print(f"  frame votes ({n} frames of 1 s):")
+        for c in saved["classes"]:                      # always list all classes, in a fixed order
+            v = counts.get(c, 0)
+            print(f"    {c:9s} {v:3d}/{n}  ({100 * v / n:5.1f} %)")
 
 
 if __name__ == "__main__":

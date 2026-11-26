@@ -7,6 +7,8 @@ before the FFT.
 The Hann window is applied right before the FFT, in features.py, because RMS and
 zero-crossing rate are measured on the frame without a window.
 """
+import warnings
+
 import numpy as np
 import librosa
 from scipy.signal import butter, sosfiltfilt
@@ -28,8 +30,15 @@ _SOS = butter(FILTER_ORDER, [LOW_HZ, HIGH_HZ], btype="bandpass", fs=SR, output="
 
 
 def load_clip(path):
-    """Read an audio file as mono, resampled to SR if needed. Returns a 1-D float array."""
-    y, _ = librosa.load(path, sr=SR, mono=True)
+    """Read an audio file as mono, resampled to SR if needed. Returns a 1-D float array.
+
+    .wav is read directly; for .m4a/.mp3 librosa warns that it falls back to its second
+    reader (audioread). That fallback works, so these two warnings are hidden here.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="PySoundFile failed")
+        warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
+        y, _ = librosa.load(path, sr=SR, mono=True)
     return y
 
 

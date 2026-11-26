@@ -9,6 +9,9 @@ report/figs/examples.pdf/.png  Figure 1: waveform (top) and spectrum (bottom), o
 report/figs/confusion.pdf/.png Figure 2: copied from results/ (made by pipeline.py)
 report/figs/features.pdf/.png  box plots of the most useful features per class
 report/figs/clusters.pdf/.png  all frames in 2-D (PCA of the 25 scaled features), coloured by class
+report/figs/classifiers.png    confusion matrices of all four classifiers (same folds as pipeline.py)
+report/figs/tree.png           the first levels of the decision tree (how it decides)
+report/figs/settings.png       accuracy vs. k (k-NN) and vs. max_depth (tree)
 Also prints why the worst clip is misclassified (report section 2d).
 """
 from pathlib import Path
@@ -97,6 +100,51 @@ def clusters_figure(X, y, groups, mark="chopping_017"):
     plt.close(fig)
 
 
+def classifier_figures(X, y, groups):
+    from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
+    from sklearn.tree import DecisionTreeClassifier, plot_tree
+    from evaluation import make_models, cross_validate_model, SEED
+    from tune import knn, tree
+
+    # 1. confusion matrix of every classifier
+    models = make_models()
+    fig, axes = plt.subplots(1, len(models), figsize=(16, 4.2))
+    for ax, (name, model) in zip(axes, models.items()):
+        r = cross_validate_model(model, X, y, groups)
+        cm = confusion_matrix(y, r["pred"], labels=CLASSES)
+        ConfusionMatrixDisplay(cm, display_labels=CLASSES).plot(ax=ax, cmap="Blues", values_format="d", colorbar=False)
+        ax.set_title(f"{name}\naccuracy {r['acc'].mean():.1f} %, macro F1 {r['f1'].mean():.1f} %", fontsize=9)
+        ax.tick_params(labelsize=8)
+    fig.tight_layout()
+    fig.savefig(FIGS / "classifiers.png", dpi=150)
+    plt.close(fig)
+
+    # 2. the decision tree's first questions (trained on all frames, depth 3 so it stays readable)
+    t = DecisionTreeClassifier(max_depth=3, random_state=SEED).fit(X, y)
+    fig = plt.figure(figsize=(16, 6))
+    plot_tree(t, feature_names=FEATURE_NAMES, class_names=list(t.classes_), filled=True,
+              impurity=False, proportion=False, fontsize=9)
+    fig.savefig(FIGS / "tree.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # 3. effect of the main setting
+    ks = [1, 3, 5, 7, 9, 15, 25]
+    depths = [1, 2, 3, 4, 5, 6, 8, 10, None]
+    acc_k = [cross_validate_model(knn(k), X, y, groups)["acc"] for k in ks]
+    acc_d = [cross_validate_model(tree(d), X, y, groups)["acc"] for d in depths]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.4))
+    axes[0].errorbar(ks, [a.mean() for a in acc_k], yerr=[a.std() for a in acc_k], fmt="o-", capsize=3)
+    axes[0].set_xlabel("k (number of neighbours)"); axes[0].set_ylabel("accuracy %"); axes[0].set_title("k-NN")
+    lab = [str(d) for d in depths]
+    axes[1].errorbar(lab, [a.mean() for a in acc_d], yerr=[a.std() for a in acc_d], fmt="o-", capsize=3, color="C2")
+    axes[1].set_xlabel("max_depth (None = unlimited)"); axes[1].set_title("decision tree")
+    for ax in axes:
+        ax.set_ylim(60, 100); ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(FIGS / "settings.png", dpi=150)
+    plt.close(fig)
+
+
 def explain_clip(X, y, clip):
     """Compare one clip's median features with the class medians (evidence for report 2d)."""
     f = np.median(clip_features(ROOT / "data" / clip.split("_")[0] / f"{clip}.wav"), axis=0)
@@ -113,6 +161,7 @@ def main():
     X, y, groups = build_table()
     features_figure(X, y)
     clusters_figure(X, y, groups)
+    classifier_figures(X, y, groups)
     for ext in ("pdf", "png"):
         src = ROOT / "results" / f"confusion_matrix.{ext}"
         if src.exists():
