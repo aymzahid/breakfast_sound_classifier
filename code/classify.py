@@ -43,7 +43,7 @@ def main(paths):
     saved = load_model()
     for p in paths:
         label, counts, n = classify(p, saved)
-        print(f"\n{Path(p).name} : classified as {label.upper()}")
+        print(f"\n{Path(p).name} : classified as {label.upper()}") # type: ignore
         print(f"  frame votes ({n} frames of 1 s):")
         for c in saved["classes"]:                      # always list all classes, in a fixed order
             v = counts.get(c, 0)

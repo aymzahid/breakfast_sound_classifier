@@ -65,6 +65,9 @@ def trim(y, sr):
 
 
 def main():
+    if not RAW.exists():                       # raw recordings are not part of the submission
+        print(f"{RAW} not found: the original recordings are not included, data/ is already prepared. Nothing done.")
+        return
     for sub in ("m4a", "wav", "test", *CLASSES.values()):
         if (DATA / sub).exists():
             shutil.rmtree(DATA / sub)          # rebuild from raw/ every time
